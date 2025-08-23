@@ -13,14 +13,13 @@
     .msg { padding: .75rem 1rem; border-radius: 14px; margin: .35rem 0; white-space: pre-wrap; }
     .msg.user { background:#1b2342; }
     .msg.assistant { background:#18213a; }
-    .msg.tool { background:#142235; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .msg.tool { background:#142235; font-family: ui-monospace, Menlo, Consolas, "Liberation Mono", monospace; }
     .small-muted { color: var(--muted); font-size: .85rem; }
     .tool-pill { font-size: .75rem; padding:.15rem .5rem; border:1px solid #2c3b66; border-radius:999px; color:#b9c3e8; }
     .code-input { height: 140px; font-family: ui-monospace, Menlo, Consolas, monospace; }
     .spinner { display:none; }
     .kbd { background:#0f152b; border:1px solid #2b3462; border-radius:6px; padding:.05rem .35rem; }
     .model-config textarea { height: 70px; }
-    iframe#runner { display:none; }
     .link { color:#a9c6ff; }
   </style>
 </head>
@@ -28,7 +27,7 @@
 <div class="container py-4">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h3 class="m-0">🤖 LLM Agent (POC)</h3>
-    <div class="small-muted">JS multi-tool agent · OpenAI/Gemini calls</div>
+    <div class="small-muted">JS multi-tool agent · Chat + Web Search + Sandbox</div>
   </div>
 
   <!-- Alerts -->
@@ -36,6 +35,7 @@
 
   <div class="row g-3">
     <div class="col-lg-8">
+      <!-- Chat -->
       <div class="app-card p-3">
         <div class="d-flex gap-2 align-items-center mb-2">
           <span class="tool-pill">Chat</span>
@@ -47,8 +47,25 @@
           <button id="sendBtn" class="btn btn-primary">Send</button>
         </div>
       </div>
+
+      <!-- JS Sandbox -->
+      <div class="app-card p-3 mt-3">
+        <div class="d-flex align-items-center mb-2">
+          <strong class="me-2">Sandboxed JS Runner</strong>
+          <span class="small-muted">Agent can call <code>run_js</code> or you can run code manually.</span>
+        </div>
+        <textarea id="jsCode" class="form-control code-input" spellcheck="false">
+// Example: return 21 * 2;
+return Array.from({length: 5}, (_,i) => i*i);
+        </textarea>
+        <div class="d-flex mt-2 gap-2">
+          <button id="runCode" class="btn btn-outline-light btn-sm">Run Code</button>
+          <div class="small small-muted">Result: <span id="codeResult">(not run)</span></div>
+        </div>
+      </div>
     </div>
 
+    <!-- Config -->
     <div class="col-lg-4">
       <div class="app-card p-3">
         <div class="d-flex align-items-center mb-2">
@@ -81,6 +98,13 @@
             <label class="form-label small">Gemini Key</label>
             <input id="geminiKey" class="form-control form-control-sm" type="password" placeholder="AIza..." />
           </div>
+          <hr/>
+          <div class="mb-2">
+            <label class="form-label small">Google Search (Custom Search JSON API)</label>
+            <input id="googleKey" class="form-control form-control-sm" placeholder="Google API Key" />
+            <input id="googleCx" class="form-control form-control-sm mt-1" placeholder="Search Engine ID (cx)" />
+            <div class="form-text">Get from developers.google.com/custom-search</div>
+          </div>
           <button id="saveCfgBtn" class="btn btn-success btn-sm w-100">Save Config</button>
         </div>
       </div>
@@ -105,7 +129,9 @@ const cfg = {
   model: localStorage.getItem('model') || 'gemini-1.5-flash',
   apiBase: localStorage.getItem('apiBase') || 'https://api.openai.com/v1',
   apiKey: localStorage.getItem('apiKey') || '',
-  geminiKey: localStorage.getItem('geminiKey') || ''
+  geminiKey: localStorage.getItem('geminiKey') || '',
+  googleKey: localStorage.getItem('googleKey') || '',
+  googleCx: localStorage.getItem('googleCx') || ''
 };
 
 function bindCfg() {
@@ -114,6 +140,8 @@ function bindCfg() {
   apiBase.value = cfg.apiBase;
   apiKey.value = cfg.apiKey;
   geminiKey.value = cfg.geminiKey;
+  googleKey.value = cfg.googleKey;
+  googleCx.value = cfg.googleCx;
 }
 
 function saveCfg() {
@@ -122,10 +150,11 @@ function saveCfg() {
   cfg.apiBase = apiBase.value; localStorage.setItem('apiBase', cfg.apiBase);
   cfg.apiKey = apiKey.value; localStorage.setItem('apiKey', cfg.apiKey);
   cfg.geminiKey = geminiKey.value; localStorage.setItem('geminiKey', cfg.geminiKey);
+  cfg.googleKey = googleKey.value; localStorage.setItem('googleKey', cfg.googleKey);
+  cfg.googleCx = googleCx.value; localStorage.setItem('googleCx', cfg.googleCx);
   showAlert('Configuration saved.', 'success', 2500);
 }
-const saveCfgBtn = document.getElementById('saveCfgBtn');
-saveCfgBtn.addEventListener('click', saveCfg);
+document.getElementById('saveCfgBtn').addEventListener('click', saveCfg);
 
 // Chat UI helpers
 const messagesEl = document.getElementById('messages');
@@ -151,10 +180,7 @@ async function callLLM(messages) {
         contents: messages.map(m => ({ role: m.role, parts: [{ text: m.content }] }))
       })
     });
-    if (!r.ok) {
-      const txt = await r.text();
-      throw new Error('Gemini API failed: ' + r.status + ' ' + txt);
-    }
+    if (!r.ok) throw new Error('Gemini API failed: ' + r.status + ' ' + await r.text());
     const data = await r.json();
     return { content: data.candidates?.[0]?.content?.parts?.[0]?.text || '(no response)' };
   }
@@ -167,12 +193,37 @@ async function callLLM(messages) {
     },
     body: JSON.stringify({ model: cfg.model, messages, temperature: 0.4 })
   });
-  if (!r.ok) {
-    const txt = await r.text();
-    throw new Error('OpenAI API failed: ' + r.status + ' ' + txt);
-  }
+  if (!r.ok) throw new Error('OpenAI API failed: ' + r.status + ' ' + await r.text());
   const data = await r.json();
   return { content: data.choices?.[0]?.message?.content || '(no reply)' };
+}
+
+// JS Sandbox (manual)
+const runBtn = document.getElementById('runCode');
+const jsCode = document.getElementById('jsCode');
+const codeResult = document.getElementById('codeResult');
+runBtn.addEventListener('click', async () => {
+  try {
+    const fn = new Function(jsCode.value);
+    const result = await fn();
+    codeResult.textContent = JSON.stringify(result);
+  } catch (err) {
+    codeResult.textContent = "Error: " + err.message;
+  }
+});
+
+// Web Search
+async function searchWeb(query, num=5){
+  if (!cfg.googleKey || !cfg.googleCx) throw new Error("Google API key & cx required");
+  const url = new URL('https://www.googleapis.com/customsearch/v1');
+  url.searchParams.set('key', cfg.googleKey);
+  url.searchParams.set('cx', cfg.googleCx);
+  url.searchParams.set('q', query);
+  url.searchParams.set('num', String(Math.min(10, Math.max(1, num))));
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("Google Search API failed: " + r.status);
+  const data = await r.json();
+  return (data.items || []).map(it => `${it.title}\n${it.link}\n${it.snippet}`).join("\n\n");
 }
 
 // Core loop
@@ -183,6 +234,28 @@ async function agentTurn(userText) {
     busy.style.display = 'inline-block';
     addMsg('user', userText);
     convo.push({ role: 'user', content: userText });
+
+    // Tool routing
+    if (/^search\s+/i.test(userText)) {
+      const q = userText.replace(/^search\s+/i,'');
+      const results = await searchWeb(q);
+      addMsg('tool', results);
+      convo.push({ role:'assistant', content: results });
+      return;
+    }
+    if (/^js\s+/i.test(userText)) {
+      const code = userText.replace(/^js\s+/i,'');
+      try {
+        const fn = new Function(code);
+        const res = await fn();
+        addMsg('tool', "Result: " + JSON.stringify(res));
+        convo.push({ role:'assistant', content: String(res) });
+      } catch(err) {
+        addMsg('tool', "Error: " + err.message);
+      }
+      return;
+    }
+
     const { content } = await callLLM(convo);
     addMsg('assistant', content);
     convo.push({ role: 'assistant', content });
@@ -208,7 +281,7 @@ userInput.addEventListener('keydown', (e) => {
 window.addEventListener('load', bindCfg);
 
 // greet
-addMsg('assistant', 'Hi! I am a browser-based LLM agent. Ask me something.');
+addMsg('assistant', 'Hi! I am a browser-based LLM agent. Ask me something. You can also try:\n- "search spaceX news"\n- "js return 6*7;"');
 </script>
 </body>
 </html>
