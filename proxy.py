@@ -1,11 +1,16 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import requests
+import os 
 
 app = Flask(__name__)
 CORS(app)  # 🔑 allow CORS for all domains
 
 AIPIPE_URL = "https://aipipe.org/openrouter/v1/chat/completions"
+
+@app.route("/")
+def home():
+    return render_template("index.html")
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -31,16 +36,13 @@ def chat():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
-
-# if __name__ == "__main__":
-#     from pyngrok import ngrok
-#     import uvicorn
-#     port = int(os.environ.get("PORT", 8000))
-#     # Your reserved ngrok domain here
-#     reserved_domain = "still-finch-sacred.ngrok-free.app"
-#     # Open an ngrok tunnel with reserved domain
-#     public_url = ngrok.connect(addr=port, hostname=reserved_domain)
-#     print(f"ngrok tunnel available at: {public_url.public_url}")
-
-#     uvicorn.run(app, host="0.0.0.0", port=port)
+    # For local development without ngrok
+    # app.run(host="0.0.0.0", port=5000, debug=True)
+    
+    # If you want to use ngrok, use this instead:
+    from pyngrok import ngrok
+    port = int(os.environ.get("PORT", 5000))
+    reserved_domain = "grubworm-innocent-wombat.ngrok-free.app"
+    public_url = ngrok.connect(addr=port, hostname=reserved_domain)
+    print(f"ngrok tunnel available at: {public_url.public_url}")
+    app.run(host="0.0.0.0", port=port)
