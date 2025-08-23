@@ -78,17 +78,18 @@ return Array.from({length: 5}, (_,i) => i*i);
             <select id="provider" class="form-select form-select-sm">
               <option value="openai">OpenAI or compatible</option>
               <option value="gemini">Gemini (Google AI)</option>
+              <option value="aipipe">AI Pipe Proxy</option>
               <option value="localmock">Local Mock (offline demo)</option>
             </select>
           </div>
           <div class="mb-2">
             <label class="form-label small">Model</label>
-            <input id="model" class="form-control form-control-sm" value="gemini-1.5-flash" />
+            <input id="model" class="form-control form-control-sm" value="gpt-4o-mini" />
           </div>
           <div class="mb-2">
             <label class="form-label small">API Base URL</label>
             <input id="apiBase" class="form-control form-control-sm" value="https://api.openai.com/v1" />
-            <div class="form-text">Ignored if Gemini is selected</div>
+            <div class="form-text">Ignored if Gemini or AI Pipe is selected</div>
           </div>
           <div class="mb-2">
             <label class="form-label small">API Key (OpenAI)</label>
@@ -97,6 +98,14 @@ return Array.from({length: 5}, (_,i) => i*i);
           <div class="mb-2">
             <label class="form-label small">Gemini Key</label>
             <input id="geminiKey" class="form-control form-control-sm" type="password" placeholder="AIza..." />
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">AI Pipe Key</label>
+            <input id="aipipeKey" class="form-control form-control-sm" type="password" placeholder="Paste AI Pipe token" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">AI Pipe Email</label>
+            <input id="aipipeEmail" class="form-control form-control-sm" type="email" placeholder="you@example.com" />
           </div>
           <hr/>
           <div class="mb-2">
@@ -126,10 +135,12 @@ function showAlert(message, type = 'danger', timeout = 5000) {
 
 const cfg = {
   provider: localStorage.getItem('provider') || 'gemini',
-  model: localStorage.getItem('model') || 'gemini-1.5-flash',
+  model: localStorage.getItem('model') || 'gpt-4o-mini',
   apiBase: localStorage.getItem('apiBase') || 'https://api.openai.com/v1',
   apiKey: localStorage.getItem('apiKey') || '',
   geminiKey: localStorage.getItem('geminiKey') || '',
+  aipipeKey: localStorage.getItem('aipipeKey') || '',
+  aipipeEmail: localStorage.getItem('aipipeEmail') || '',
   googleKey: localStorage.getItem('googleKey') || '',
   googleCx: localStorage.getItem('googleCx') || ''
 };
@@ -140,6 +151,8 @@ function bindCfg() {
   apiBase.value = cfg.apiBase;
   apiKey.value = cfg.apiKey;
   geminiKey.value = cfg.geminiKey;
+  aipipeKey.value = cfg.aipipeKey;
+  aipipeEmail.value = cfg.aipipeEmail;
   googleKey.value = cfg.googleKey;
   googleCx.value = cfg.googleCx;
 }
@@ -150,6 +163,8 @@ function saveCfg() {
   cfg.apiBase = apiBase.value; localStorage.setItem('apiBase', cfg.apiBase);
   cfg.apiKey = apiKey.value; localStorage.setItem('apiKey', cfg.apiKey);
   cfg.geminiKey = geminiKey.value; localStorage.setItem('geminiKey', cfg.geminiKey);
+  cfg.aipipeKey = aipipeKey.value; localStorage.setItem('aipipeKey', cfg.aipipeKey);
+  cfg.aipipeEmail = aipipeEmail.value; localStorage.setItem('aipipeEmail', cfg.aipipeEmail);
   cfg.googleKey = googleKey.value; localStorage.setItem('googleKey', cfg.googleKey);
   cfg.googleCx = googleCx.value; localStorage.setItem('googleCx', cfg.googleCx);
   showAlert('Configuration saved.', 'success', 2500);
@@ -169,7 +184,7 @@ function addMsg(role, text) {
 // LLM call
 async function callLLM(messages) {
   if (cfg.provider === 'localmock') {
-    return { content: 'Mock reply. Configure OpenAI or Gemini for real responses.' };
+    return { content: 'Mock reply. Configure a real provider.' };
   }
   if (cfg.provider === 'gemini') {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${cfg.geminiKey}`;
@@ -184,25 +199,37 @@ async function callLLM(messages) {
     const data = await r.json();
     return { content: data.candidates?.[0]?.content?.parts?.[0]?.text || '(no response)' };
   }
-  // OpenAI fallback
-  const r = await fetch(cfg.apiBase.replace(/\/$/, '') + '/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${cfg.apiKey}`
-    },
-    body: JSON.stringify({ model: cfg.model, messages, temperature: 0.4 })
+  if (cfg.provider === 'aipipe') {
+  const r = await fetch("http://localhost:5000/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      apiKey: cfg.aipipeKey,
+      email: cfg.aipipeEmail,
+      payload: { model: cfg.model, messages }
+    })
   });
+
+  if (!r.ok) throw new Error('AI Pipe Proxy failed: ' + r.status + ' ' + await r.text());
+  const data = await r.json();
+  console.log("AI Pipe response:", data);
+
+  // Defensive parsing for both OpenRouter and AiPipe styles
+  const content =
+    data?.choices?.[0]?.message?.content ||
+    data?.choices?.[0]?.delta?.content || // in case of streaming
+    JSON.stringify(data, null, 2);
+
+  return { content };
+}
+
   if (!r.ok) throw new Error('OpenAI API failed: ' + r.status + ' ' + await r.text());
   const data = await r.json();
   return { content: data.choices?.[0]?.message?.content || '(no reply)' };
 }
 
 // JS Sandbox (manual)
-const runBtn = document.getElementById('runCode');
-const jsCode = document.getElementById('jsCode');
-const codeResult = document.getElementById('codeResult');
-runBtn.addEventListener('click', async () => {
+runCode.addEventListener('click', async () => {
   try {
     const fn = new Function(jsCode.value);
     const result = await fn();
@@ -228,14 +255,12 @@ async function searchWeb(query, num=5){
 
 // Core loop
 const convo = [];
-const busy = document.getElementById('busy');
 async function agentTurn(userText) {
   try {
     busy.style.display = 'inline-block';
     addMsg('user', userText);
     convo.push({ role: 'user', content: userText });
 
-    // Tool routing
     if (/^search\s+/i.test(userText)) {
       const q = userText.replace(/^search\s+/i,'');
       const results = await searchWeb(q);
@@ -267,8 +292,6 @@ async function agentTurn(userText) {
 }
 
 // Wire UI
-const userInput = document.getElementById('userInput');
-const sendBtn = document.getElementById('sendBtn');
 sendBtn.addEventListener('click', () => {
   const t = userInput.value.trim();
   if (!t) return;
