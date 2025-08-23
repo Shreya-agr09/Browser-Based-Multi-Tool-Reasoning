@@ -1,310 +1,631 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LLM Agent (POC) – Browser Multi-Tool</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    :root { --bg: #0b1020; --card: #11162a; --muted: #9aa4bf; }
-    body { background: var(--bg); color: #e6ecff; }
-    .app-card { background: var(--card); border-radius: 18px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
-    .messages { height: 52vh; overflow:auto; padding-right: .5rem; }
-    .msg { padding: .75rem 1rem; border-radius: 14px; margin: .35rem 0; white-space: pre-wrap; }
-    .msg.user { background:#1b2342; }
-    .msg.assistant { background:#18213a; }
-    .msg.tool { background:#142235; font-family: ui-monospace, Menlo, Consolas, "Liberation Mono", monospace; }
-    .small-muted { color: var(--muted); font-size: .85rem; }
-    .tool-pill { font-size: .75rem; padding:.15rem .5rem; border:1px solid #2c3b66; border-radius:999px; color:#b9c3e8; }
-    .code-input { height: 140px; font-family: ui-monospace, Menlo, Consolas, monospace; }
-    .spinner { display:none; }
-    .kbd { background:#0f152b; border:1px solid #2b3462; border-radius:6px; padding:.05rem .35rem; }
-    .model-config textarea { height: 70px; }
-    .link { color:#a9c6ff; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced LLM Agent (POC)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { 
+            --bg: #0b1020; 
+            --card: #11162a; 
+            --muted: #9aa4bf;
+            --user-msg: #1b2342;
+            --assistant-msg: #18213a;
+            --tool-msg: #142235;
+            --user-accent: #4a6bff;
+            --assistant-accent: #7e57c2;
+            --tool-accent: #0d8a61;
+        }
+        body { background: var(--bg); color: #e6ecff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .app-card { background: var(--card); border-radius: 18px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+        .messages { height: 52vh; overflow: auto; padding-right: .5rem; }
+        .msg { padding: .75rem 1rem; border-radius: 14px; margin: .35rem 0; white-space: pre-wrap; position: relative; }
+        .msg.user { background: var(--user-msg); border-left: 4px solid var(--user-accent); }
+        .msg.assistant { background: var(--assistant-msg); border-left: 4px solid var(--assistant-accent); }
+        .msg.tool { background: var(--tool-msg); border-left: 4px solid var(--tool-accent); font-family: ui-monospace, Menlo, Consolas, "Liberation Mono", monospace; }
+        .small-muted { color: var(--muted); font-size: .85rem; }
+        .tool-pill { font-size: .75rem; padding:.15rem .5rem; border:1px solid #2c3b66; border-radius:999px; color:#b9c3e8; }
+        .code-input { height: 140px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+        .spinner { display:none; }
+        .kbd { background:#0f152b; border:1px solid #2b3462; border-radius:6px; padding:.05rem .35rem; }
+        .model-config textarea { height: 70px; }
+        .link { color:#a9c6ff; text-decoration: none; }
+        .link:hover { text-decoration: underline; }
+        .guide-section { margin-top: 1.5rem; }
+        .guide-header { cursor: pointer; padding: 0.75rem; background: rgba(27, 35, 66, 0.5); border-radius: 10px; margin-bottom: 0.5rem; }
+        .guide-content { display: none; padding: 0.75rem; background: rgba(20, 25, 47, 0.5); border-radius: 10px; margin-bottom: 1rem; }
+        .guide-step { margin-bottom: 0.75rem; padding-left: 1.5rem; position: relative; }
+        .guide-step:before { content: "→"; position: absolute; left: 0; color: #a9c6ff; }
+        .accordion-icon { transition: transform 0.3s ease; }
+        .accordion-expanded .accordion-icon { transform: rotate(90deg); }
+        .msg-container { display: flex; margin-bottom: 15px; }
+        .msg-time { font-size: 0.7rem; color: var(--muted); text-align: right; margin-top: 5px; }
+        .typing-indicator { display: inline-flex; align-items: center; }
+        .typing-dot { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; margin: 0 2px; animation: typingAnimation 1.4s infinite ease-in-out; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typingAnimation {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-5px); }
+        }
+        .model-badge { font-size: 0.75rem; padding: 2px 8px; background: rgba(0,0,0,0.2); border-radius: 10px; margin-left: 10px; }
+        .info-icon { color: #a9c6ff; margin-left: 5px; cursor: pointer; }
+        .info-box { background: rgba(20, 25, 47, 0.7); padding: 10px; border-radius: 8px; margin-top: 5px; font-size: 0.9rem; }
+        .msg-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; flex-shrink: 0; }
+        .user-avatar { background: var(--user-accent); }
+        .assistant-avatar { background: var(--assistant-accent); }
+        .tool-avatar { background: var(--tool-accent); }
+        .msg-content { flex: 1; }
+        .msg-header { display: flex; align-items: center; margin-bottom: 5px; font-weight: 500; }
+        .tag { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.3); margin-left: 8px; }
+        .config-section { margin-bottom: 15px; }
+        .config-header { display: flex; align-items: center; margin-bottom: 8px; }
+        .config-title { font-weight: 600; margin: 0; font-size: 1rem; }
+    </style>
 </head>
 <body>
 <div class="container py-4">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h3 class="m-0">🤖 LLM Agent (POC)</h3>
-    <div class="small-muted">JS multi-tool agent · Chat + Web Search + Sandbox</div>
-  </div>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h3 class="m-0">🤖 Enhanced LLM Agent (POC)</h3>
+        <div class="small-muted">JS multi-tool agent · Chat + Web Search + Sandbox</div>
+    </div>
 
-  <!-- Alerts -->
-  <div id="alerts"></div>
+    <!-- Alerts -->
+    <div id="alerts"></div>
 
-  <div class="row g-3">
-    <div class="col-lg-8">
-      <!-- Chat -->
-      <div class="app-card p-3">
-        <div class="d-flex gap-2 align-items-center mb-2">
-          <span class="tool-pill">Chat</span>
-          <span class="ms-auto small-muted">Press <span class="kbd">Enter</span> to send</span>
-        </div>
-        <div id="messages" class="messages"></div>
-        <div class="d-flex mt-2 gap-2">
-          <input id="userInput" class="form-control" placeholder="Ask me anything…" />
-          <button id="sendBtn" class="btn btn-primary">Send</button>
-        </div>
-      </div>
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <!-- Chat -->
+            <div class="app-card p-3">
+                <div class="d-flex gap-2 align-items-center mb-2">
+                    <span class="tool-pill">Chat</span>
+                    <span class="ms-auto small-muted">Press <span class="kbd">Enter</span> to send</span>
+                </div>
+                <div id="messages" class="messages">
+                    <!-- Messages will be added here dynamically -->
+                </div>
+                <div class="d-flex mt-2 gap-2">
+                    <input id="userInput" class="form-control" placeholder="Ask me anything…" />
+                    <button id="sendBtn" class="btn btn-primary">Send</button>
+                </div>
+            </div>
 
-      <!-- JS Sandbox -->
-      <div class="app-card p-3 mt-3">
-        <div class="d-flex align-items-center mb-2">
-          <strong class="me-2">Sandboxed JS Runner</strong>
-          <span class="small-muted">Agent can call <code>run_js</code> or you can run code manually.</span>
-        </div>
-        <textarea id="jsCode" class="form-control code-input" spellcheck="false">
+            <!-- JS Sandbox -->
+            <div class="app-card p-3 mt-3">
+                <div class="d-flex align-items-center mb-2">
+                    <strong class="me-2">Sandboxed JS Runner</strong>
+                    <span class="small-muted">Agent can call <code>run_js</code> or you can run code manually.</span>
+                </div>
+                <textarea id="jsCode" class="form-control code-input" spellcheck="false">
 // Example: return 21 * 2;
 return Array.from({length: 5}, (_,i) => i*i);
-        </textarea>
-        <div class="d-flex mt-2 gap-2">
-          <button id="runCode" class="btn btn-outline-light btn-sm">Run Code</button>
-          <div class="small small-muted">Result: <span id="codeResult">(not run)</span></div>
+                </textarea>
+                <div class="d-flex mt-2 gap-2">
+                    <button id="runCode" class="btn btn-outline-light btn-sm">Run Code</button>
+                    <div class="small small-muted">Result: <span id="codeResult">(not run)</span></div>
+                </div>
+            </div>
+            
+            <!-- API Key Guide -->
+            <div class="app-card p-3 mt-3 guide-section">
+                <h5>📚 API Key Setup Guide</h5>
+                <p class="small-muted">Follow these instructions to obtain the required API keys</p>
+                
+                <!-- OpenAI Guide -->
+                <div class="guide-header" onclick="toggleGuide('openaiGuide')">
+                    <strong>OpenAI API Key</strong> <span class="accordion-icon ms-2">›</span>
+                </div>
+                <div id="openaiGuide" class="guide-content">
+                    <div class="guide-step">Visit <a href="https://platform.openai.com/api-keys" target="_blank" class="link">platform.openai.com/api-keys</a></div>
+                    <div class="guide-step">Sign in to your OpenAI account (create one if needed)</div>
+                    <div class="guide-step">Click "Create new secret key"</div>
+                    <div class="guide-step">Give it a descriptive name and click "Create secret key"</div>
+                    <div class="guide-step">Copy the key immediately (you won't be able to see it again)</div>
+                    <div class="guide-step">Paste it in the OpenAI API Key field in the configuration panel</div>
+                </div>
+                
+                <!-- Gemini Guide -->
+                <div class="guide-header" onclick="toggleGuide('geminiGuide')">
+                    <strong>Google Gemini API Key</strong> <span class="accordion-icon ms-2">›</span>
+                </div>
+                <div id="geminiGuide" class="guide-content">
+                    <div class="guide-step">Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link">aistudio.google.com/app/apikey</a></div>
+                    <div class="guide-step">Sign in with your Google account</div>
+                    <div class="guide-step">Click "Create API Key"</div>
+                    <div class="guide-step">Select "Create API Key in new project" or choose existing</div>
+                    <div class="guide-step">Copy the generated API key</div>
+                    <div class="guide-step">Paste it in the Gemini Key field in the configuration panel</div>
+                </div>
+                
+                <!-- Google Search Guide -->
+                <div class="guide-header" onclick="toggleGuide('googleGuide')">
+                    <strong>Google Search API Keys</strong> <span class="accordion-icon ms-2">›</span>
+                </div>
+                <div id="googleGuide" class="guide-content">
+                    <div class="guide-step">Visit <a href="https://developers.google.com/custom-search/v1/introduction" target="_blank" class="link">developers.google.com/custom-search</a></div>
+                    <div class="guide-step">Click "Get Started" on the Custom Search JSON API</div>
+                    <div class="guide-step">Create a new project or select an existing one</div>
+                    <div class="guide-step">Enable the Custom Search JSON API</div>
+                    <div class="guide-step">Go to <a href="https://programmablesearchengine.google.com/about/" target="_blank" class="link">programmablesearchengine.google.com</a> to create a search engine</div>
+                    <div class="guide-step">Specify sites to search or select "Search the entire web"</div>
+                    <div class="guide-step">Note the Search Engine ID (found in your control panel)</div>
+                    <div class="guide-step">Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="link">Credentials section</a> to create an API key</div>
+                    <div class="guide-step">Paste the API Key and Search Engine ID in the respective fields</div>
+                </div>
+                
+                <!-- AI Pipe Guide -->
+                <div class="guide-header" onclick="toggleGuide('aipipeGuide')">
+                    <strong>AI Pipe Proxy Setup</strong> <span class="accordion-icon ms-2">›</span>
+                </div>
+                <div id="aipipeGuide" class="guide-content">
+                    <div class="guide-step">Visit <a href="https://aipipe.ai" target="_blank" class="link">aipipe.ai</a></div>
+                    <div class="guide-step">Sign up for an account</div>
+                    <div class="guide-step">Navigate to your dashboard or account settings</div>
+                    <div class="guide-step">Find your API token (may be called "Access Token")</div>
+                    <div class="guide-step">Copy the token and paste it in the AI Pipe Key field</div>
+                    <div class="guide-step">Enter the email associated with your account in the AI Pipe Email field</div>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Config -->
-    <div class="col-lg-4">
-      <div class="app-card p-3">
-        <div class="d-flex align-items-center mb-2">
-          <strong class="me-2">Model & APIs</strong>
-          <span class="spinner-border spinner-border-sm text-light ms-auto" id="busy"></span>
+        <!-- Config -->
+        <div class="col-lg-4">
+            <div class="app-card p-3">
+                <div class="d-flex align-items-center mb-2">
+                    <strong class="me-2">Model & APIs</strong>
+                    <span class="spinner-border spinner-border-sm text-light ms-auto" id="busy"></span>
+                </div>
+                <div class="model-config">
+                    <div class="config-section">
+                        <div class="config-header">
+                            <label class="form-label small config-title">Provider</label>
+                            <i class="fas fa-info-circle info-icon" title="Select your AI provider"></i>
+                        </div>
+                        <select id="provider" class="form-select form-select-sm">
+                            <option value="openai">OpenAI or compatible</option>
+                            <option value="gemini">Gemini (Google AI)</option>
+                            <option value="aipipe">AI Pipe Proxy</option>
+                            <option value="localmock">Local Mock (offline demo)</option>
+                        </select>
+                        <div class="info-box" id="localmock-info" style="display: none;">
+                            <strong>Local Mock Mode:</strong> This mode works offline and generates example responses without using any API. Useful for testing the interface without credentials.
+                        </div>
+                    </div>
+                    
+                    <div class="config-section">
+                        <div class="config-header">
+                            <label class="form-label small config-title">Model</label>
+                            <i class="fas fa-info-circle info-icon" title="Select the model for your provider"></i>
+                        </div>
+                        <select id="model" class="form-select form-select-sm">
+                            <!-- Options will be populated dynamically -->
+                        </select>
+                    </div>
+                    
+                    <div class="config-section">
+                        <div class="config-header">
+                            <label class="form-label small config-title">API Base URL (Optional)</label>
+                            <i class="fas fa-info-circle info-icon" title="When to use a custom API Base URL"></i>
+                        </div>
+                        <input id="apiBase" class="form-control form-control-sm" value="https://api.openai.com/v1" />
+                        <div class="info-box">
+                            <strong>When to use:</strong> Only needed if you're using an OpenAI-compatible API with a different endpoint (e.g., Azure OpenAI, local inference server, or other proxy services).
+                        </div>
+                    </div>
+                    
+                    <div class="config-section">
+                        <label class="form-label small">API Key (OpenAI)</label>
+                        <input id="apiKey" class="form-control form-control-sm" type="password" placeholder="sk-..." />
+                    </div>
+                    
+                    <div class="config-section">
+                        <label class="form-label small">Gemini Key</label>
+                        <input id="geminiKey" class="form-control form-control-sm" type="password" placeholder="AIza..." />
+                    </div>
+                    
+                    <div class="config-section">
+                        <label class="form-label small">AI Pipe Key</label>
+                        <input id="aipipeKey" class="form-control form-control-sm" type="password" placeholder="Paste AI Pipe token" />
+                    </div>
+                    
+                    <div class="config-section">
+                        <label class="form-label small">AI Pipe Email</label>
+                        <input id="aipipeEmail" class="form-control form-control-sm" type="email" placeholder="you@example.com" />
+                    </div>
+                    
+                    <hr/>
+                    
+                    <div class="config-section">
+                        <label class="form-label small">Google Search (Custom Search JSON API)</label>
+                        <input id="googleKey" class="form-control form-control-sm" placeholder="Google API Key" />
+                        <input id="googleCx" class="form-control form-control-sm mt-1" placeholder="Search Engine ID (cx)" />
+                        <div class="form-text">Get from developers.google.com/custom-search</div>
+                    </div>
+                    
+                    <button id="saveCfgBtn" class="btn btn-success btn-sm w-100">Save Config</button>
+                </div>
+            </div>
         </div>
-        <div class="model-config">
-          <div class="mb-2">
-            <label class="form-label small">Provider</label>
-            <select id="provider" class="form-select form-select-sm">
-              <option value="openai">OpenAI or compatible</option>
-              <option value="gemini">Gemini (Google AI)</option>
-              <option value="aipipe">AI Pipe Proxy</option>
-              <option value="localmock">Local Mock (offline demo)</option>
-            </select>
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">Model</label>
-            <input id="model" class="form-control form-control-sm" value="gpt-4o-mini" />
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">API Base URL</label>
-            <input id="apiBase" class="form-control form-control-sm" value="https://api.openai.com/v1" />
-            <div class="form-text">Ignored if Gemini or AI Pipe is selected</div>
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">API Key (OpenAI)</label>
-            <input id="apiKey" class="form-control form-control-sm" type="password" placeholder="sk-..." />
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">Gemini Key</label>
-            <input id="geminiKey" class="form-control form-control-sm" type="password" placeholder="AIza..." />
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">AI Pipe Key</label>
-            <input id="aipipeKey" class="form-control form-control-sm" type="password" placeholder="Paste AI Pipe token" />
-          </div>
-          <div class="mb-2">
-            <label class="form-label small">AI Pipe Email</label>
-            <input id="aipipeEmail" class="form-control form-control-sm" type="email" placeholder="you@example.com" />
-          </div>
-          <hr/>
-          <div class="mb-2">
-            <label class="form-label small">Google Search (Custom Search JSON API)</label>
-            <input id="googleKey" class="form-control form-control-sm" placeholder="Google API Key" />
-            <input id="googleCx" class="form-control form-control-sm mt-1" placeholder="Search Engine ID (cx)" />
-            <div class="form-text">Get from developers.google.com/custom-search</div>
-          </div>
-          <button id="saveCfgBtn" class="btn btn-success btn-sm w-100">Save Config</button>
-        </div>
-      </div>
     </div>
-  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+// Model options for each provider
+const modelOptions = {
+    openai: [
+        { value: "gpt-4o", label: "GPT-4o (Latest)" },
+        { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+        { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
+        { value: "gpt-4", label: "GPT-4" },
+        { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" }
+    ],
+    gemini: [
+        { value: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+        { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
+        { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
+        { value: "gemini-pro", label: "Gemini Pro" }
+    ],
+    aipipe: [
+        { value: "gpt-4o", label: "GPT-4o" },
+        { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
+        { value: "claude-3-opus", label: "Claude 3 Opus" },
+        { value: "claude-3-sonnet", label: "Claude 3 Sonnet" },
+        { value: "mixtral-8x7b", label: "Mixtral 8x7B" }
+    ],
+    localmock: [
+        { value: "mock-model", label: "Mock Model (Offline)" }
+    ]
+};
+
 function showAlert(message, type = 'danger', timeout = 5000) {
-  const alerts = document.getElementById('alerts');
-  const el = document.createElement('div');
-  el.className = `alert alert-${type} alert-dismissible fade show`;
-  el.role = 'alert';
-  el.innerHTML = `<div>${message}</div><button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
-  alerts.appendChild(el);
-  if (timeout) setTimeout(() => bootstrap.Alert.getOrCreateInstance(el).close(), timeout);
+    const alerts = document.getElementById('alerts');
+    const el = document.createElement('div');
+    el.className = `alert alert-${type} alert-dismissible fade show`;
+    el.role = 'alert';
+    el.innerHTML = `<div>${message}</div><button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+    alerts.appendChild(el);
+    if (timeout) setTimeout(() => bootstrap.Alert.getOrCreateInstance(el).close(), timeout);
+}
+
+// Toggle guide sections
+function toggleGuide(id) {
+    const guide = document.getElementById(id);
+    const header = guide.previousElementSibling;
+    
+    if (guide.style.display === 'block') {
+        guide.style.display = 'none';
+        header.classList.remove('accordion-expanded');
+    } else {
+        guide.style.display = 'block';
+        header.classList.add('accordion-expanded');
+    }
+}
+
+// Update model options based on provider
+function updateModelOptions() {
+    const provider = document.getElementById('provider').value;
+    const modelSelect = document.getElementById('model');
+    const options = modelOptions[provider] || [];
+    
+    // Clear existing options
+    modelSelect.innerHTML = '';
+    
+    // Add new options
+    options.forEach(option => {
+        const optElement = document.createElement('option');
+        optElement.value = option.value;
+        optElement.textContent = option.label;
+        modelSelect.appendChild(optElement);
+    });
+    
+    // Set the saved model if available, otherwise first option
+    if (cfg.model && options.some(opt => opt.value === cfg.model)) {
+        modelSelect.value = cfg.model;
+    } else if (options.length > 0) {
+        modelSelect.value = options[0].value;
+    }
+    
+    // Show/hide local mock info
+    const localmockInfo = document.getElementById('localmock-info');
+    if (provider === 'localmock') {
+        localmockInfo.style.display = 'block';
+    } else {
+        localmockInfo.style.display = 'none';
+    }
 }
 
 const cfg = {
-  provider: localStorage.getItem('provider') || 'gemini',
-  model: localStorage.getItem('model') || 'gpt-4o-mini',
-  apiBase: localStorage.getItem('apiBase') || 'https://api.openai.com/v1',
-  apiKey: localStorage.getItem('apiKey') || '',
-  geminiKey: localStorage.getItem('geminiKey') || '',
-  aipipeKey: localStorage.getItem('aipipeKey') || '',
-  aipipeEmail: localStorage.getItem('aipipeEmail') || '',
-  googleKey: localStorage.getItem('googleKey') || '',
-  googleCx: localStorage.getItem('googleCx') || ''
+    provider: localStorage.getItem('provider') || 'openai',
+    model: localStorage.getItem('model') || 'gpt-4o-mini',
+    apiBase: localStorage.getItem('apiBase') || 'https://api.openai.com/v1',
+    apiKey: localStorage.getItem('apiKey') || '',
+    geminiKey: localStorage.getItem('geminiKey') || '',
+    aipipeKey: localStorage.getItem('aipipeKey') || '',
+    aipipeEmail: localStorage.getItem('aipipeEmail') || '',
+    googleKey: localStorage.getItem('googleKey') || '',
+    googleCx: localStorage.getItem('googleCx') || ''
 };
 
 function bindCfg() {
-  provider.value = cfg.provider;
-  model.value = cfg.model;
-  apiBase.value = cfg.apiBase;
-  apiKey.value = cfg.apiKey;
-  geminiKey.value = cfg.geminiKey;
-  aipipeKey.value = cfg.aipipeKey;
-  aipipeEmail.value = cfg.aipipeEmail;
-  googleKey.value = cfg.googleKey;
-  googleCx.value = cfg.googleCx;
+    provider.value = cfg.provider;
+    updateModelOptions();
+    apiBase.value = cfg.apiBase;
+    apiKey.value = cfg.apiKey;
+    geminiKey.value = cfg.geminiKey;
+    aipipeKey.value = cfg.aipipeKey;
+    aipipeEmail.value = cfg.aipipeEmail;
+    googleKey.value = cfg.googleKey;
+    googleCx.value = cfg.googleCx;
 }
 
 function saveCfg() {
-  cfg.provider = provider.value; localStorage.setItem('provider', cfg.provider);
-  cfg.model = model.value; localStorage.setItem('model', cfg.model);
-  cfg.apiBase = apiBase.value; localStorage.setItem('apiBase', cfg.apiBase);
-  cfg.apiKey = apiKey.value; localStorage.setItem('apiKey', cfg.apiKey);
-  cfg.geminiKey = geminiKey.value; localStorage.setItem('geminiKey', cfg.geminiKey);
-  cfg.aipipeKey = aipipeKey.value; localStorage.setItem('aipipeKey', cfg.aipipeKey);
-  cfg.aipipeEmail = aipipeEmail.value; localStorage.setItem('aipipeEmail', cfg.aipipeEmail);
-  cfg.googleKey = googleKey.value; localStorage.setItem('googleKey', cfg.googleKey);
-  cfg.googleCx = googleCx.value; localStorage.setItem('googleCx', cfg.googleCx);
-  showAlert('Configuration saved.', 'success', 2500);
+    cfg.provider = provider.value; localStorage.setItem('provider', cfg.provider);
+    cfg.model = model.value; localStorage.setItem('model', cfg.model);
+    cfg.apiBase = apiBase.value; localStorage.setItem('apiBase', cfg.apiBase);
+    cfg.apiKey = apiKey.value; localStorage.setItem('apiKey', cfg.apiKey);
+    cfg.geminiKey = geminiKey.value; localStorage.setItem('geminiKey', cfg.geminiKey);
+    cfg.aipipeKey = aipipeKey.value; localStorage.setItem('aipipeKey', cfg.aipipeKey);
+    cfg.aipipeEmail = aipipeEmail.value; localStorage.setItem('aipipeEmail', cfg.aipipeEmail);
+    cfg.googleKey = googleKey.value; localStorage.setItem('googleKey', cfg.googleKey);
+    cfg.googleCx = googleCx.value; localStorage.setItem('googleCx', cfg.googleCx);
+    showAlert('Configuration saved.', 'success', 2500);
 }
 document.getElementById('saveCfgBtn').addEventListener('click', saveCfg);
 
 // Chat UI helpers
 const messagesEl = document.getElementById('messages');
-function addMsg(role, text) {
-  const div = document.createElement('div');
-  div.className = `msg ${role}`;
-  div.textContent = text;
-  messagesEl.appendChild(div);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+let typingIndicatorId = null;
+
+function addMsg(role, text, isTyping = false) {
+    const msgContainer = document.createElement('div');
+    msgContainer.className = 'msg-container';
+    
+    const avatar = document.createElement('div');
+    avatar.className = `msg-avatar ${role}-avatar`;
+    
+    if (role === 'user') {
+        avatar.innerHTML = '<i class="fas fa-user"></i>';
+    } else if (role === 'assistant') {
+        avatar.innerHTML = '<i class="fas fa-robot"></i>';
+    } else {
+        avatar.innerHTML = '<i class="fas fa-code"></i>';
+    }
+    
+    const msgContent = document.createElement('div');
+    msgContent.className = 'msg-content';
+    
+    const msgHeader = document.createElement('div');
+    msgHeader.className = 'msg-header';
+    
+    if (role === 'user') {
+        msgHeader.innerHTML = 'You';
+    } else if (role === 'assistant') {
+        msgHeader.innerHTML = 'Assistant';
+        if (!isTyping) {
+            const modelBadge = document.createElement('span');
+            modelBadge.className = 'model-badge';
+            modelBadge.textContent = cfg.model;
+            msgHeader.appendChild(modelBadge);
+        }
+    } else {
+        msgHeader.innerHTML = 'Tool';
+        const toolTag = document.createElement('span');
+        toolTag.className = 'tag';
+        toolTag.textContent = 'JavaScript';
+        msgHeader.appendChild(toolTag);
+    }
+    
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `msg ${role}`;
+    
+    if (isTyping) {
+        const typingIndicator = document.createElement('div');
+        typingIndicator.className = 'typing-indicator';
+        typingIndicator.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+        msgDiv.appendChild(typingIndicator);
+    } else {
+        msgDiv.textContent = text;
+        
+        // Add timestamp
+        const time = document.createElement('div');
+        time.className = 'msg-time';
+        time.textContent = new Date().toLocaleTimeString();
+        msgDiv.appendChild(time);
+    }
+    
+    msgContent.appendChild(msgHeader);
+    msgContent.appendChild(msgDiv);
+    
+    msgContainer.appendChild(avatar);
+    msgContainer.appendChild(msgContent);
+    
+    messagesEl.appendChild(msgContainer);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    
+    if (isTyping) {
+        // Store the typing indicator ID for later removal
+        typingIndicatorId = msgContainer.id = 'typing-indicator-' + Date.now();
+    }
+    
+    return msgContainer;
+}
+
+function removeTypingIndicator() {
+    if (typingIndicatorId) {
+        const indicator = document.getElementById(typingIndicatorId);
+        if (indicator) {
+            indicator.remove();
+        }
+        typingIndicatorId = null;
+    }
 }
 
 // LLM call
 async function callLLM(messages) {
-  if (cfg.provider === 'localmock') {
-    return { content: 'Mock reply. Configure a real provider.' };
-  }
-  if (cfg.provider === 'gemini') {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${cfg.geminiKey}`;
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: messages.map(m => ({ role: m.role, parts: [{ text: m.content }] }))
-      })
+    if (cfg.provider === 'localmock') {
+        // Simulate API delay for mock
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Generate a mock response based on the last user message
+        const lastUserMessage = messages.filter(m => m.role === 'user').pop()?.content || '';
+        
+        if (lastUserMessage.toLowerCase().includes('tiger')) {
+            return { content: 'A tiger is a large, carnivorous mammal belonging to the genus *Panthera*. They are members of the cat family (Felidae) and are known for their distinctive orange and black stripes, powerful build, and solitary nature. Tigers are apex predators, meaning they are at the top of their food chain, and play a crucial role in maintaining the balance of their ecosystems. They are found in various parts of Asia.' };
+        }
+        
+        return { content: 'This is a mock response from the local demo mode. To get real responses, please configure an API provider.\n\nYou asked: ' + lastUserMessage };
+    }
+    if (cfg.provider === 'gemini') {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${cfg.geminiKey}`;
+        const r = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: messages.map(m => ({ role: m.role === 'assistant' ? 'model' : m.role, parts: [{ text: m.content }] }))
+            })
+        });
+        if (!r.ok) throw new Error('Gemini API failed: ' + r.status + ' ' + await r.text());
+        const data = await r.json();
+        return { content: data.candidates?.[0]?.content?.parts?.[0]?.text || '(no response)' };
+    }
+    if (cfg.provider === 'aipipe') {
+        const r = await fetch("http://localhost:5000/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                apiKey: cfg.aipipeKey,
+                email: cfg.aipipeEmail,
+                payload: { model: cfg.model, messages }
+            })
+        });
+
+        if (!r.ok) throw new Error('AI Pipe Proxy failed: ' + r.status + ' ' + await r.text());
+        const data = await r.json();
+        console.log("AI Pipe response:", data);
+
+        // Defensive parsing for both OpenRouter and AiPipe styles
+        const content =
+            data?.choices?.[0]?.message?.content ||
+            data?.choices?.[0]?.delta?.content || // in case of streaming
+            JSON.stringify(data, null, 2);
+
+        return { content };
+    }
+    
+    // Default to OpenAI API
+    const r = await fetch(`${cfg.apiBase}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${cfg.apiKey}`
+        },
+        body: JSON.stringify({
+            model: cfg.model,
+            messages: messages,
+            stream: false
+        })
     });
-    if (!r.ok) throw new Error('Gemini API failed: ' + r.status + ' ' + await r.text());
+
+    if (!r.ok) throw new Error('OpenAI API failed: ' + r.status + ' ' + await r.text());
     const data = await r.json();
-    return { content: data.candidates?.[0]?.content?.parts?.[0]?.text || '(no response)' };
-  }
-  if (cfg.provider === 'aipipe') {
-  const r = await fetch("http://localhost:5000/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      apiKey: cfg.aipipeKey,
-      email: cfg.aipipeEmail,
-      payload: { model: cfg.model, messages }
-    })
-  });
-
-  if (!r.ok) throw new Error('AI Pipe Proxy failed: ' + r.status + ' ' + await r.text());
-  const data = await r.json();
-  console.log("AI Pipe response:", data);
-
-  // Defensive parsing for both OpenRouter and AiPipe styles
-  const content =
-    data?.choices?.[0]?.message?.content ||
-    data?.choices?.[0]?.delta?.content || // in case of streaming
-    JSON.stringify(data, null, 2);
-
-  return { content };
-}
-
-  if (!r.ok) throw new Error('OpenAI API failed: ' + r.status + ' ' + await r.text());
-  const data = await r.json();
-  return { content: data.choices?.[0]?.message?.content || '(no reply)' };
+    return { content: data.choices?.[0]?.message?.content || '(no reply)' };
 }
 
 // JS Sandbox (manual)
-runCode.addEventListener('click', async () => {
-  try {
-    const fn = new Function(jsCode.value);
-    const result = await fn();
-    codeResult.textContent = JSON.stringify(result);
-  } catch (err) {
-    codeResult.textContent = "Error: " + err.message;
-  }
+document.getElementById('runCode').addEventListener('click', async () => {
+    const jsCode = document.getElementById('jsCode');
+    const codeResult = document.getElementById('codeResult');
+    
+    try {
+        const fn = new Function(jsCode.value);
+        const result = await fn();
+        codeResult.textContent = JSON.stringify(result);
+    } catch (err) {
+        codeResult.textContent = "Error: " + err.message;
+    }
 });
 
 // Web Search
 async function searchWeb(query, num=5){
-  if (!cfg.googleKey || !cfg.googleCx) throw new Error("Google API key & cx required");
-  const url = new URL('https://www.googleapis.com/customsearch/v1');
-  url.searchParams.set('key', cfg.googleKey);
-  url.searchParams.set('cx', cfg.googleCx);
-  url.searchParams.set('q', query);
-  url.searchParams.set('num', String(Math.min(10, Math.max(1, num))));
-  const r = await fetch(url);
-  if (!r.ok) throw new Error("Google Search API failed: " + r.status);
-  const data = await r.json();
-  return (data.items || []).map(it => `${it.title}\n${it.link}\n${it.snippet}`).join("\n\n");
+    if (!cfg.googleKey || !cfg.googleCx) throw new Error("Google API key & cx required");
+    const url = new URL('https://www.googleapis.com/customsearch/v1');
+    url.searchParams.set('key', cfg.googleKey);
+    url.searchParams.set('cx', cfg.googleCx);
+    url.searchParams.set('q', query);
+    url.searchParams.set('num', String(Math.min(10, Math.max(1, num))));
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("Google Search API failed: " + r.status);
+    const data = await r.json();
+    return (data.items || []).map(it => `${it.title}\n${it.link}\n${it.snippet}`).join("\n\n");
 }
 
 // Core loop
 const convo = [];
 async function agentTurn(userText) {
-  try {
-    busy.style.display = 'inline-block';
-    addMsg('user', userText);
-    convo.push({ role: 'user', content: userText });
+    try {
+        document.getElementById('busy').style.display = 'inline-block';
+        addMsg('user', userText);
+        convo.push({ role: 'user', content: userText });
 
-    if (/^search\s+/i.test(userText)) {
-      const q = userText.replace(/^search\s+/i,'');
-      const results = await searchWeb(q);
-      addMsg('tool', results);
-      convo.push({ role:'assistant', content: results });
-      return;
-    }
-    if (/^js\s+/i.test(userText)) {
-      const code = userText.replace(/^js\s+/i,'');
-      try {
-        const fn = new Function(code);
-        const res = await fn();
-        addMsg('tool', "Result: " + JSON.stringify(res));
-        convo.push({ role:'assistant', content: String(res) });
-      } catch(err) {
-        addMsg('tool', "Error: " + err.message);
-      }
-      return;
-    }
+        if (/^search\s+/i.test(userText)) {
+            const q = userText.replace(/^search\s+/i,'');
+            const results = await searchWeb(q);
+            addMsg('tool', results);
+            convo.push({ role:'assistant', content: results });
+            return;
+        }
+        if (/^js\s+/i.test(userText)) {
+            const code = userText.replace(/^js\s+/i,'');
+            try {
+                const fn = new Function(code);
+                const res = await fn();
+                addMsg('tool', "Result: " + JSON.stringify(res));
+                convo.push({ role:'assistant', content: String(res) });
+            } catch(err) {
+                addMsg('tool', "Error: " + err.message);
+            }
+            return;
+        }
 
-    const { content } = await callLLM(convo);
-    addMsg('assistant', content);
-    convo.push({ role: 'assistant', content });
-  } catch (err) {
-    showAlert(err.message, 'danger');
-  } finally {
-    busy.style.display = 'none';
-  }
+        // Show typing indicator
+        addMsg('assistant', '', true);
+        
+        const { content } = await callLLM(convo);
+        
+        // Remove typing indicator and add actual message
+        removeTypingIndicator();
+        addMsg('assistant', content);
+        convo.push({ role: 'assistant', content });
+    } catch (err) {
+        // Make sure to remove typing indicator even on error
+        removeTypingIndicator();
+        showAlert(err.message, 'danger');
+    } finally {
+        document.getElementById('busy').style.display = 'none';
+    }
 }
 
 // Wire UI
-sendBtn.addEventListener('click', () => {
-  const t = userInput.value.trim();
-  if (!t) return;
-  userInput.value = '';
-  agentTurn(t);
+document.getElementById('sendBtn').addEventListener('click', () => {
+    const t = document.getElementById('userInput').value.trim();
+    if (!t) return;
+    document.getElementById('userInput').value = '';
+    agentTurn(t);
 });
-userInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBtn.click(); }
+document.getElementById('userInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('sendBtn').click(); }
 });
+
+// Update model options when provider changes
+document.getElementById('provider').addEventListener('change', updateModelOptions);
+
 window.addEventListener('load', bindCfg);
 
-// greet
-addMsg('assistant', 'Hi! I am a browser-based LLM agent. Ask me something. You can also try:\n- "search spaceX news"\n- "js return 6*7;"');
+// Initial greeting
+addMsg('assistant', 'Hi! I am a browser-based LLM agent. Ask me something. You can also try:\n- "search spaceX news"\n- "js return 6*7;"\n- "Tell me about tigers"');
 </script>
 </body>
 </html>

@@ -32,3 +32,15 @@ def chat():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
+# if __name__ == "__main__":
+#     from pyngrok import ngrok
+#     import uvicorn
+#     port = int(os.environ.get("PORT", 8000))
+#     # Your reserved ngrok domain here
+#     reserved_domain = "still-finch-sacred.ngrok-free.app"
+#     # Open an ngrok tunnel with reserved domain
+#     public_url = ngrok.connect(addr=port, hostname=reserved_domain)
+#     print(f"ngrok tunnel available at: {public_url.public_url}")
+
+#     uvicorn.run(app, host="0.0.0.0", port=port)
