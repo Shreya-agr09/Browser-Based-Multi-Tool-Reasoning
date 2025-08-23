@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LLM Agent (POC) – Browser Multi-Tool</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root { --bg: #0b1020; --card: #11162a; --muted: #9aa4bf; }
+    body { background: var(--bg); color: #e6ecff; }
+    .app-card { background: var(--card); border-radius: 18px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+    .messages { height: 52vh; overflow:auto; padding-right: .5rem; }
+    .msg { padding: .75rem 1rem; border-radius: 14px; margin: .35rem 0; white-space: pre-wrap; }
+    .msg.user { background:#1b2342; }
+    .msg.assistant { background:#18213a; }
+    .msg.tool { background:#142235; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .small-muted { color: var(--muted); font-size: .85rem; }
+    .tool-pill { font-size: .75rem; padding:.15rem .5rem; border:1px solid #2c3b66; border-radius:999px; color:#b9c3e8; }
+    .code-input { height: 140px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .spinner { display:none; }
+    .kbd { background:#0f152b; border:1px solid #2b3462; border-radius:6px; padding:.05rem .35rem; }
+    .model-config textarea { height: 70px; }
+    iframe#runner { display:none; }
+    .link { color:#a9c6ff; }
+  </style>
+</head>
+<body>
+<div class="container py-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="m-0">🤖 LLM Agent (POC)</h3>
+    <div class="small-muted">JS multi-tool agent · OpenAI/Gemini calls</div>
+  </div>
+
+  <!-- Alerts -->
+  <div id="alerts"></div>
+
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <div class="app-card p-3">
+        <div class="d-flex gap-2 align-items-center mb-2">
+          <span class="tool-pill">Chat</span>
+          <span class="ms-auto small-muted">Press <span class="kbd">Enter</span> to send</span>
+        </div>
+        <div id="messages" class="messages"></div>
+        <div class="d-flex mt-2 gap-2">
+          <input id="userInput" class="form-control" placeholder="Ask me anything…" />
+          <button id="sendBtn" class="btn btn-primary">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="app-card p-3">
+        <div class="d-flex align-items-center mb-2">
+          <strong class="me-2">Model & APIs</strong>
+          <span class="spinner-border spinner-border-sm text-light ms-auto" id="busy"></span>
+        </div>
+        <div class="model-config">
+          <div class="mb-2">
+            <label class="form-label small">Provider</label>
+            <select id="provider" class="form-select form-select-sm">
+              <option value="openai">OpenAI or compatible</option>
+              <option value="gemini">Gemini (Google AI)</option>
+              <option value="localmock">Local Mock (offline demo)</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Model</label>
+            <input id="model" class="form-control form-control-sm" value="gemini-1.5-flash" />
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">API Base URL</label>
+            <input id="apiBase" class="form-control form-control-sm" value="https://api.openai.com/v1" />
+            <div class="form-text">Ignored if Gemini is selected</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">API Key (OpenAI)</label>
+            <input id="apiKey" class="form-control form-control-sm" type="password" placeholder="sk-..." />
+          </div>
+          <div class="mb-2">
+            <label class="form-label small">Gemini Key</label>
+            <input id="geminiKey" class="form-control form-control-sm" type="password" placeholder="AIza..." />
+          </div>
+          <button id="saveCfgBtn" class="btn btn-success btn-sm w-100">Save Config</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function showAlert(message, type = 'danger', timeout = 5000) {
+  const alerts = document.getElementById('alerts');
+  const el = document.createElement('div');
+  el.className = `alert alert-${type} alert-dismissible fade show`;
+  el.role = 'alert';
+  el.innerHTML = `<div>${message}</div><button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+  alerts.appendChild(el);
+  if (timeout) setTimeout(() => bootstrap.Alert.getOrCreateInstance(el).close(), timeout);
+}
+
+const cfg = {
+  provider: localStorage.getItem('provider') || 'gemini',
+  model: localStorage.getItem('model') || 'gemini-1.5-flash',
+  apiBase: localStorage.getItem('apiBase') || 'https://api.openai.com/v1',
+  apiKey: localStorage.getItem('apiKey') || '',
+  geminiKey: localStorage.getItem('geminiKey') || ''
+};
+
+function bindCfg() {
+  provider.value = cfg.provider;
+  model.value = cfg.model;
+  apiBase.value = cfg.apiBase;
+  apiKey.value = cfg.apiKey;
+  geminiKey.value = cfg.geminiKey;
+}
+
+function saveCfg() {
+  cfg.provider = provider.value; localStorage.setItem('provider', cfg.provider);
+  cfg.model = model.value; localStorage.setItem('model', cfg.model);
+  cfg.apiBase = apiBase.value; localStorage.setItem('apiBase', cfg.apiBase);
+  cfg.apiKey = apiKey.value; localStorage.setItem('apiKey', cfg.apiKey);
+  cfg.geminiKey = geminiKey.value; localStorage.setItem('geminiKey', cfg.geminiKey);
+  showAlert('Configuration saved.', 'success', 2500);
+}
+const saveCfgBtn = document.getElementById('saveCfgBtn');
+saveCfgBtn.addEventListener('click', saveCfg);
+
+// Chat UI helpers
+const messagesEl = document.getElementById('messages');
+function addMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+// LLM call
+async function callLLM(messages) {
+  if (cfg.provider === 'localmock') {
+    return { content: 'Mock reply. Configure OpenAI or Gemini for real responses.' };
+  }
+  if (cfg.provider === 'gemini') {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${cfg.geminiKey}`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: messages.map(m => ({ role: m.role, parts: [{ text: m.content }] }))
+      })
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error('Gemini API failed: ' + r.status + ' ' + txt);
+    }
+    const data = await r.json();
+    return { content: data.candidates?.[0]?.content?.parts?.[0]?.text || '(no response)' };
+  }
+  // OpenAI fallback
+  const r = await fetch(cfg.apiBase.replace(/\/$/, '') + '/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${cfg.apiKey}`
+    },
+    body: JSON.stringify({ model: cfg.model, messages, temperature: 0.4 })
+  });
+  if (!r.ok) {
+    const txt = await r.text();
+    throw new Error('OpenAI API failed: ' + r.status + ' ' + txt);
+  }
+  const data = await r.json();
+  return { content: data.choices?.[0]?.message?.content || '(no reply)' };
+}
+
+// Core loop
+const convo = [];
+const busy = document.getElementById('busy');
+async function agentTurn(userText) {
+  try {
+    busy.style.display = 'inline-block';
+    addMsg('user', userText);
+    convo.push({ role: 'user', content: userText });
+    const { content } = await callLLM(convo);
+    addMsg('assistant', content);
+    convo.push({ role: 'assistant', content });
+  } catch (err) {
+    showAlert(err.message, 'danger');
+  } finally {
+    busy.style.display = 'none';
+  }
+}
+
+// Wire UI
+const userInput = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+sendBtn.addEventListener('click', () => {
+  const t = userInput.value.trim();
+  if (!t) return;
+  userInput.value = '';
+  agentTurn(t);
+});
+userInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBtn.click(); }
+});
+window.addEventListener('load', bindCfg);
+
+// greet
+addMsg('assistant', 'Hi! I am a browser-based LLM agent. Ask me something.');
+</script>
+</body>
+</html>
