@@ -37,12 +37,12 @@ def chat():
 
 if __name__ == "__main__":
     # For local development without ngrok
-    # app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
     
     # If you want to use ngrok, use this instead:
-    from pyngrok import ngrok
-    port = int(os.environ.get("PORT", 5000))
-    reserved_domain = "grubworm-innocent-wombat.ngrok-free.app"
-    public_url = ngrok.connect(addr=port, hostname=reserved_domain)
-    print(f"ngrok tunnel available at: {public_url.public_url}")
-    app.run(host="0.0.0.0", port=port)
+    # from pyngrok import ngrok
+    # port = int(os.environ.get("PORT", 5000))
+    # reserved_domain = "grubworm-innocent-wombat.ngrok-free.app"
+    # public_url = ngrok.connect(addr=port, hostname=reserved_domain)
+    # print(f"ngrok tunnel available at: {public_url.public_url}")
+    # app.run(host="0.0.0.0", port=port)

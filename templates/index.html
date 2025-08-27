@@ -63,6 +63,8 @@
         .config-section { margin-bottom: 15px; }
         .config-header { display: flex; align-items: center; margin-bottom: 8px; }
         .config-title { font-weight: 600; margin: 0; font-size: 1rem; }
+        .provider-note { color: #fff; font-size: 0.8rem; margin-top: 5px; }
+        .search-help { color: #9aa4bf !important; }
     </style>
 </head>
 <body>
@@ -189,6 +191,7 @@ return Array.from({length: 5}, (_,i) => i*i);
                             <option value="aipipe">AI Pipe Proxy</option>
                             <option value="localmock">Local Mock (offline demo)</option>
                         </select>
+                        <div class="provider-note">Remember to click "Save Config" after changing provider</div>
                         <div class="info-box" id="localmock-info" style="display: none;">
                             <strong>Local Mock Mode:</strong> This mode works offline and generates example responses without using any API. Useful for testing the interface without credentials.
                         </div>
@@ -241,7 +244,7 @@ return Array.from({length: 5}, (_,i) => i*i);
                         <label class="form-label small">Google Search (Custom Search JSON API)</label>
                         <input id="googleKey" class="form-control form-control-sm" placeholder="Google API Key" />
                         <input id="googleCx" class="form-control form-control-sm mt-1" placeholder="Search Engine ID (cx)" />
-                        <div class="form-text">Get from developers.google.com/custom-search</div>
+                        <div class="form-text search-help">Get from developers.google.com/custom-search</div>
                     </div>
                     
                     <button id="saveCfgBtn" class="btn btn-success btn-sm w-100">Save Config</button>
@@ -479,6 +482,9 @@ async function callLLM(messages) {
         return { content: 'This is a mock response from the local demo mode. To get real responses, please configure an API provider.\n\nYou asked: ' + lastUserMessage };
     }
     if (cfg.provider === 'gemini') {
+        if (!cfg.geminiKey) {
+            throw new Error('Gemini API key is required. Please configure it in the settings.');
+        }
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${cfg.geminiKey}`;
         const r = await fetch(url, {
             method: 'POST',
@@ -492,7 +498,10 @@ async function callLLM(messages) {
         return { content: data.candidates?.[0]?.content?.parts?.[0]?.text || '(no response)' };
     }
     if (cfg.provider === 'aipipe') {
-        const r = await fetch("http://localhost:5000/chat", {
+        if (!cfg.aipipeKey || !cfg.aipipeEmail) {
+            throw new Error('AI Pipe key and email are required. Please configure them in the settings.');
+        }
+        const r = await fetch("https://grubworm-innocent-wombat.ngrok-free.app/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -501,6 +510,7 @@ async function callLLM(messages) {
                 payload: { model: cfg.model, messages }
             })
         });
+
 
         if (!r.ok) throw new Error('AI Pipe Proxy failed: ' + r.status + ' ' + await r.text());
         const data = await r.json();
@@ -516,6 +526,10 @@ async function callLLM(messages) {
     }
     
     // Default to OpenAI API
+    if (!cfg.apiKey && cfg.provider === 'openai') {
+        throw new Error('OpenAI API key is required. Please configure it in the settings.');
+    }
+    
     const r = await fetch(`${cfg.apiBase}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -550,7 +564,13 @@ document.getElementById('runCode').addEventListener('click', async () => {
 
 // Web Search
 async function searchWeb(query, num=5){
-    if (!cfg.googleKey || !cfg.googleCx) throw new Error("Google API key & cx required");
+    if (!cfg.googleKey || !cfg.googleCx) {
+        if (cfg.provider === 'localmock') {
+            // Return mock search results for offline mode
+            return `Mock search results for: ${query}\n\n1. Example Result 1\nhttps://example.com/1\nThis is a sample search result description.\n\n2. Example Result 2\nhttps://example.com/2\nAnother sample search result for demonstration purposes.`;
+        }
+        throw new Error("Google API key & cx required for web search");
+    }
     const url = new URL('https://www.googleapis.com/customsearch/v1');
     url.searchParams.set('key', cfg.googleKey);
     url.searchParams.set('cx', cfg.googleCx);
