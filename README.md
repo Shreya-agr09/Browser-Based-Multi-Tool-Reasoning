@@ -89,3 +89,24 @@ An interactive **web-based chat agent** that integrates with multiple LLM provid
 ## Deployment URL
   https://browser-based-multi-tool-reasoning.onrender.com/
 
+## 📸 Screenshots
+
+### 1. Application Interface
+![Interface](assets/interface.png)
+
+### 2. Sandbox Execution
+![Sandbox](assets/js.png)
+
+### 3. API Keys Panel
+![Settings Panel](assets/ss2.png)
+
+### 4. WebSearch Execution
+![WebSearch](assets/websearch.png)
+
+### 5. Gemini Execution
+![Gemini Execution](assets/ss2.png)
+
+## 📽️ Demo Video
+
+You can watch the full demo here:  
+👉 [Click to Watch on Google Drive](https://drive.google.com/file/d/1a5FDwJFthmbkAXsdr13qygS4IZLL2OkZ/view?usp=sharing)
