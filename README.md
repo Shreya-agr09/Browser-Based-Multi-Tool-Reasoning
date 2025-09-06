@@ -104,7 +104,7 @@ An interactive **web-based chat agent** that integrates with multiple LLM provid
 ![WebSearch](assets/websearch.png)
 
 ### 5. Gemini Execution
-![Gemini Execution](assets/ss2.png)
+![Gemini Execution](assets/gemini.png)
 
 ## 📽️ Demo Video
 
