@@ -98,7 +98,7 @@ An interactive **web-based chat agent** that integrates with multiple LLM provid
 ![Sandbox](assets/js.png)
 
 ### 3. API Keys Panel
-![Settings Panel](assets/ss2.png)
+![Settings Panel](assets/ss2js.png)
 
 ### 4. WebSearch Execution
 ![WebSearch](assets/websearch.png)
